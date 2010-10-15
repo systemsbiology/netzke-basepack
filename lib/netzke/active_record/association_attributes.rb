@@ -43,19 +43,44 @@ module Netzke::ActiveRecord
               else
                 method_missing_without_basepack(method, *args, &block)
               end
+            elsif split.size == 3
+              assoc_record = self.send(split.first.to_sym)
+              children_records = assoc_record.send(split[1].to_sym)
+              assoc_method = split.last.chop
+              if children_records
+                begin
+                  assoc_instance = children_records.send("find_by_#{assoc_method}", *args)
+                rescue NoMethodError
+                  assoc_instance = nil
+                  logger.debug "!!! no find_by_#{assoc_method} method for #{split[1]}\n"
+                end
+                assoc_name = split[1].singularize
+                if (assoc_instance)
+                  self.send("#{assoc_name}=", assoc_instance)
+                else
+                  logger.debug "!!! Couldn't find association #{assoc_name} by #{assoc_method} '#{args.first}'"
+                end
+              else
+                method_missing_without_basepack(method, *args, &block)
+              end
             else
               method_missing_without_basepack(method, *args, &block)
             end
           else
-            res = self
-            split.each do |m|
-              if res.respond_to?(m)
-                res = res.send(m) unless res.nil?
-              else
-                res.nil? ? nil : method_missing_without_basepack(method, *args, &block)
+            if split.size == 3
+              assoc_name = split[1].singularize
+              self.send(assoc_name).send(split[2])
+            else
+              res = self
+              split.each do |m|
+                if res.respond_to?(m)
+                  res = res.send(m) unless res.nil?
+                else
+                  res.nil? ? nil : method_missing_without_basepack(method, *args, &block)
+                end
               end
+              res
             end
-            res
           end
         else
           method_missing_without_basepack(method, *args, &block)
